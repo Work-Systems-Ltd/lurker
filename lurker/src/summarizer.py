@@ -20,7 +20,7 @@ class Summarizer:
     def __init__(self, ollama_url: str, model: str = "phi3:mini"):
         self.ollama_url = ollama_url.rstrip("/")
         self.model = model
-        self.client = httpx.AsyncClient(timeout=120.0)
+        self.client = httpx.AsyncClient(timeout=300.0)
 
     async def summarize(self, transcript: str, caller: str, callee: str) -> str:
         if not transcript.strip():
