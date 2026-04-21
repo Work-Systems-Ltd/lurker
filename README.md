@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="media/logo.png" alt="Lurker" width="300">
+  <img src="media/lurker.png" alt="Lurker" width="300">
 </p>
 
 # Lurker
@@ -89,8 +89,8 @@ sequenceDiagram
 | `asterisk-proxy` | `andrius/asterisk:22` | Interception proxy. Receives calls, enters them into ARI Stasis for Lurker to control. |
 | `lurker` | Python 3.12-slim | Core application. ARI client, RTP receiver, Whisper transcriber, web UI, Ollama client. |
 | `ollama` | `ollama/ollama` | Local LLM. Runs phi3:mini for call summarization. |
-| `sip-alice` | Debian + Baresip | Simulated SIP client. Auto-answers, sends 440Hz tone. |
-| `sip-bob` | Debian + Baresip | Simulated SIP client. Auto-answers, sends 440Hz tone. |
+| `sip-alice` | Debian + Baresip | Simulated SIP client. Auto-answers, plays a pre-generated speech WAV via espeak-ng. |
+| `sip-bob` | Debian + Baresip | Simulated SIP client. Auto-answers, plays a pre-generated speech WAV via espeak-ng. |
 
 ## Audio Pipeline
 
