@@ -35,7 +35,7 @@ services:
       ARI_PASS: lurkerpass
       RTP_LISTEN_HOST: "10.99.0.20"
       RTP_LISTEN_PORT: "9999"
-      WHISPER_MODEL: "base.en"
+      WHISPER_MODEL: "small.en"
       OLLAMA_URL: http://ollama:11434
       OLLAMA_MODEL: "qwen2:0.5b"
     depends_on:
