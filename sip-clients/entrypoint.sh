@@ -23,16 +23,15 @@ sip_listen      0.0.0.0:5060
 # Module path
 module_path     /usr/lib/baresip/modules
 
-# Audio - sine tone source, null player
+# Audio - play speech WAV file, null player for received audio
 audio_player    aufile,/dev/null
-audio_source    ausine,440
+audio_source    aufile,/${ROLE}.wav
 audio_alert     aufile,/dev/null
 
 # Modules
 module          stdio.so
 module          account.so
 module          aufile.so
-module          ausine.so
 module          g711.so
 module          stun.so
 module          uuid.so
