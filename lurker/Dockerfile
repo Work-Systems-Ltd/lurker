@@ -6,6 +6,5 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ ./src/
-COPY whisper_serve.py .
 
 CMD ["python", "-m", "src.main"]

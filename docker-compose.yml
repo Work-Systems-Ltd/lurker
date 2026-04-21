@@ -26,6 +26,8 @@ services:
     container_name: lurker
     ports:
       - "8080:8080"
+    volumes:
+      - ./lurker/src:/app/src
     environment:
       ARI_URL: http://asterisk-proxy:8088
       ARI_APP: lurker
@@ -33,24 +35,15 @@ services:
       ARI_PASS: lurkerpass
       RTP_LISTEN_HOST: "10.99.0.20"
       RTP_LISTEN_PORT: "9999"
-      WHISPER_URL: http://whisper:8080
+      WHISPER_MODEL: "base.en"
       OLLAMA_URL: http://ollama:11434
       OLLAMA_MODEL: "phi3:mini"
     depends_on:
       - asterisk-proxy
-      - whisper
       - ollama
     networks:
       lurker-net:
         ipv4_address: 10.99.0.20
-    restart: unless-stopped
-
-  whisper:
-    build: ./whisper
-    container_name: whisper
-    networks:
-      lurker-net:
-        ipv4_address: 10.99.0.30
     restart: unless-stopped
 
   ollama:
@@ -73,6 +66,8 @@ services:
   sip-alice:
     build: ./sip-clients
     container_name: sip-alice
+    volumes:
+      - ./sip-clients/entrypoint.sh:/entrypoint.sh
     environment:
       SIP_ROLE: alice
       PBX_HOST: asterisk-pbx
@@ -87,6 +82,8 @@ services:
   sip-bob:
     build: ./sip-clients
     container_name: sip-bob
+    volumes:
+      - ./sip-clients/entrypoint.sh:/entrypoint.sh
     environment:
       SIP_ROLE: bob
       PBX_HOST: asterisk-pbx
