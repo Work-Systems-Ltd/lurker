@@ -31,10 +31,16 @@ class Lurker:
         self.rtp_host = os.environ.get("RTP_LISTEN_HOST", "10.99.0.20")
         self.whisper_model = os.environ.get("WHISPER_MODEL", "base.en")
         self.ollama_url = os.environ.get("OLLAMA_URL", "http://ollama:11434")
-        self.ollama_model = os.environ.get("OLLAMA_MODEL", "phi3:mini")
+        self.ollama_model = os.environ.get("OLLAMA_MODEL", "qwen2:0.5b")
+        self.openai_api_key = os.environ.get("OPENAI_API_KEY")
+        self.openai_model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 
         self.transcriber = Transcriber(self.whisper_model)
-        self.summarizer = Summarizer(self.ollama_url, self.ollama_model)
+        self.summarizer = Summarizer(
+            self.ollama_url, self.ollama_model,
+            openai_api_key=self.openai_api_key,
+            openai_model=self.openai_model,
+        )
 
         self.controller = ARIController(
             ari_url=self.ari_url,

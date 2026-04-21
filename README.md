@@ -34,7 +34,7 @@ graph TB
 
         subgraph Processing
             lurker[lurker<br/>Python 3.12<br/>ARI + RTP + Whisper + Web UI<br/>10.99.0.20:8080/9999]
-            ollama[ollama<br/>phi3:mini LLM<br/>10.99.0.40:11434]
+            ollama[ollama<br/>qwen2:0.5b LLM<br/>10.99.0.40:11434]
         end
     end
 
@@ -88,7 +88,7 @@ sequenceDiagram
 | `asterisk-pbx` | `andrius/asterisk:22` | Primary PBX. Hosts SIP endpoints (alice, bob), routes calls to proxy. |
 | `asterisk-proxy` | `andrius/asterisk:22` | Interception proxy. Receives calls, enters them into ARI Stasis for Lurker to control. |
 | `lurker` | Python 3.12-slim | Core application. ARI client, RTP receiver, Whisper transcriber, web UI, Ollama client. |
-| `ollama` | `ollama/ollama` | Local LLM. Runs phi3:mini for call summarization. |
+| `ollama` | `ollama/ollama` | Local LLM. Runs qwen2:0.5b for call summarization. |
 | `sip-alice` | Debian + Baresip | Simulated SIP client. Auto-answers, plays a pre-generated speech WAV via espeak-ng. |
 | `sip-bob` | Debian + Baresip | Simulated SIP client. Auto-answers, plays a pre-generated speech WAV via espeak-ng. |
 
@@ -96,7 +96,7 @@ sequenceDiagram
 
 ```
 RTP (ulaw, 8kHz) → Strip 12-byte header → Decode μ-law to 16-bit PCM
-→ Buffer 10s chunks (160KB) → Resample to 16kHz → faster-whisper (base.en, int8)
+→ Buffer 10s chunks (160KB) → Resample to 16kHz → faster-whisper (small.en, int8)
 → Accumulate transcript → On hangup: summarize via Ollama
 ```
 
@@ -107,7 +107,7 @@ git clone <repo> && cd lurker
 docker compose up -d
 ```
 
-Wait for Ollama to pull phi3:mini (~2.6GB on first run), then open [http://localhost:8080](http://localhost:8080) and click **Start Call**.
+Wait for Ollama to pull qwen2:0.5b on first run, then open [http://localhost:8080](http://localhost:8080) and click **Start Call**.
 
 Watch the logs:
 
@@ -126,9 +126,11 @@ All configuration is via environment variables in `docker-compose.yml`:
 | `ARI_USER` / `ARI_PASS` | `lurker` / `lurkerpass` | ARI credentials |
 | `RTP_LISTEN_HOST` | `10.99.0.20` | Lurker's IP for RTP reception |
 | `RTP_LISTEN_PORT` | `9999` | UDP port for incoming RTP |
-| `WHISPER_MODEL` | `base.en` | Whisper model size (`tiny.en`, `base.en`, `small.en`, `medium.en`, `large`) |
+| `WHISPER_MODEL` | `small.en` | Whisper model size (`tiny.en`, `base.en`, `small.en`, `medium.en`, `large`) |
 | `OLLAMA_URL` | `http://ollama:11434` | Ollama API endpoint |
-| `OLLAMA_MODEL` | `phi3:mini` | LLM model for summarization |
+| `OLLAMA_MODEL` | `qwen2:0.5b` | LLM model for summarization |
+| `OPENAI_API_KEY` | _(unset)_ | Set to use OpenAI for summarization instead of Ollama |
+| `OPENAI_MODEL` | `gpt-4o-mini` | OpenAI model to use when `OPENAI_API_KEY` is set |
 
 ## Project Structure
 
@@ -153,17 +155,17 @@ lurker/
 │       ├── web.py              # FastAPI UI + call trigger API
 │       └── models.py           # CallSession, TranscriptChunk
 └── media/
-    └── lurker.png
+    └── logo.png
 ```
 
 ## Tech Stack
 
 - **SIP/PBX**: Asterisk 22, PJSIP
-- **SIP Clients**: Baresip (auto-answer, sine tone source)
+- **SIP Clients**: Baresip (auto-answer, pre-generated speech WAVs via espeak-ng + sox)
 - **Call Interception**: Asterisk ARI (WebSocket + REST)
 - **Audio**: μ-law codec, 8kHz, RTP
 - **Transcription**: faster-whisper (CPU, int8 quantization)
-- **Summarization**: Ollama + phi3:mini (3.8B params)
+- **Summarization**: Ollama + qwen2:0.5b
 - **Web**: FastAPI + Uvicorn
 - **Runtime**: Python 3.12, Docker Compose
 
