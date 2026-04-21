@@ -20,18 +20,23 @@ cat > "$CONFIG_DIR/config" <<EOF
 # SIP
 sip_listen      0.0.0.0:5060
 
-# Audio - use null/silence for containerized testing
+# Module path
+module_path     /usr/lib/baresip/modules
+
+# Audio - sine tone source, null player
 audio_player    aufile,/dev/null
-audio_source    aufile,/dev/zero
+audio_source    ausine,440
 audio_alert     aufile,/dev/null
 
 # Modules
 module          stdio.so
 module          account.so
 module          aufile.so
+module          ausine.so
 module          g711.so
 module          stun.so
 module          uuid.so
+module          menu.so
 
 # Audio settings
 audio_buffer    20-160

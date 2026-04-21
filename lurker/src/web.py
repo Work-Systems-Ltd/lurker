@@ -13,6 +13,9 @@ PBX_ARI_URL = "http://asterisk-pbx:8088"
 PBX_ARI_AUTH = ("lurker", "lurkerpass")
 CALL_DURATION = 10
 
+# Track active channel IDs for hangup
+_active_channels: list[str] = []
+
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
@@ -71,28 +74,27 @@ async def index():
 async def start_call():
     try:
         async with httpx.AsyncClient(auth=PBX_ARI_AUTH, timeout=10.0) as client:
-            # Originate a call: alice calls bob through the normal dialplan
+            # Originate: PBX calls bob through the proxy trunk
+            # This goes: PBX -> proxy (Stasis intercept + RTP fork) -> PBX -> bob
             resp = await client.post(
                 f"{PBX_ARI_URL}/ari/channels",
                 params={
-                    "endpoint": "PJSIP/alice",
-                    "extension": "bob",
-                    "context": "from-internal",
-                    "priority": "1",
+                    "endpoint": "PJSIP/bob@proxy-trunk",
                     "app": "lurker-originate",
-                    "callerId": "alice",
+                    "callerId": '"Alice" <alice>',
                 },
             )
             resp.raise_for_status()
             channel = resp.json()
             channel_id = channel["id"]
 
-            logger.info("Originated call %s, will hang up in %ds", channel_id, CALL_DURATION)
+            _active_channels.append(channel_id)
+            logger.info("Originated call %s to bob via proxy, will hang up in %ds", channel_id, CALL_DURATION)
 
-            # Schedule hangup after CALL_DURATION seconds
+            # Schedule hangup
             asyncio.get_event_loop().call_later(
                 CALL_DURATION,
-                lambda: asyncio.ensure_future(_hangup(channel_id)),
+                lambda cid=channel_id: asyncio.ensure_future(_hangup(cid)),
             )
 
             return {"ok": True, "channel_id": channel_id}
@@ -109,3 +111,6 @@ async def _hangup(channel_id: str):
             logger.info("Hung up channel %s after %ds", channel_id, CALL_DURATION)
     except Exception as e:
         logger.warning("Hangup failed for %s (may have already ended): %s", channel_id, e)
+    finally:
+        if channel_id in _active_channels:
+            _active_channels.remove(channel_id)
