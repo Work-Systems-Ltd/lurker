@@ -1,0 +1,109 @@
+services:
+  asterisk-pbx:
+    build: ./asterisk-pbx
+    container_name: asterisk-pbx
+    volumes:
+      - ./asterisk-pbx/conf:/etc/asterisk
+    networks:
+      lurker-net:
+        ipv4_address: 10.99.0.10
+    restart: unless-stopped
+
+  asterisk-proxy:
+    build: ./asterisk-proxy
+    container_name: asterisk-proxy
+    volumes:
+      - ./asterisk-proxy/conf:/etc/asterisk
+    depends_on:
+      - asterisk-pbx
+    networks:
+      lurker-net:
+        ipv4_address: 10.99.0.11
+    restart: unless-stopped
+
+  lurker:
+    build: ./lurker
+    container_name: lurker
+    ports:
+      - "8080:8080"
+    environment:
+      ARI_URL: http://asterisk-proxy:8088
+      ARI_APP: lurker
+      ARI_USER: lurker
+      ARI_PASS: lurkerpass
+      RTP_LISTEN_HOST: "10.99.0.20"
+      RTP_LISTEN_PORT: "9999"
+      WHISPER_URL: http://whisper:8080
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: "phi3:mini"
+    depends_on:
+      - asterisk-proxy
+      - whisper
+      - ollama
+    networks:
+      lurker-net:
+        ipv4_address: 10.99.0.20
+    restart: unless-stopped
+
+  whisper:
+    build: ./whisper
+    container_name: whisper
+    networks:
+      lurker-net:
+        ipv4_address: 10.99.0.30
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    volumes:
+      - ollama-models:/root/.ollama
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        ollama serve &
+        sleep 10
+        ollama pull phi3:mini
+        wait
+    networks:
+      lurker-net:
+        ipv4_address: 10.99.0.40
+    restart: unless-stopped
+
+  sip-alice:
+    build: ./sip-clients
+    container_name: sip-alice
+    environment:
+      SIP_ROLE: alice
+      PBX_HOST: asterisk-pbx
+      PBX_PORT: "5060"
+    depends_on:
+      - asterisk-pbx
+    networks:
+      lurker-net:
+        ipv4_address: 10.99.0.51
+    restart: unless-stopped
+
+  sip-bob:
+    build: ./sip-clients
+    container_name: sip-bob
+    environment:
+      SIP_ROLE: bob
+      PBX_HOST: asterisk-pbx
+      PBX_PORT: "5060"
+    depends_on:
+      - asterisk-pbx
+    networks:
+      lurker-net:
+        ipv4_address: 10.99.0.52
+    restart: unless-stopped
+
+networks:
+  lurker-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.99.0.0/24
+
+volumes:
+  ollama-models:

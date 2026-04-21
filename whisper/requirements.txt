@@ -1,0 +1,5 @@
+faster-whisper>=1.0,<2
+fastapi>=0.115,<1
+uvicorn>=0.32,<1
+numpy>=1.26,<3
+librosa>=0.10,<1
