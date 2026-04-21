@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="media/lurker.png" alt="Lurker" width="300">
+  <img src="media/logo.png" alt="Lurker" width="300">
 </p>
 
 # Lurker
