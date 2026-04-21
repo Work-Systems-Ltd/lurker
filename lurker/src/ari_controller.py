@@ -45,6 +45,8 @@ class ARIController:
         self.addr_to_call: dict[tuple[str, int], str] = {}
         # channel_id -> call_id
         self.channel_to_call: dict[str, str] = {}
+        # Pending bridges: outbound_channel_id -> (inbound_channel_id, call_id)
+        self._pending_bridge: dict[str, tuple[str, str]] = {}
 
     async def run(self):
         ws_url = self.ari_url.replace("http://", "ws://").replace("https://", "wss://")
@@ -67,6 +69,7 @@ class ARIController:
 
     async def _handle_event(self, event: dict):
         event_type = event.get("type", "")
+        logger.debug("ARI event: %s", event_type)
 
         if event_type == "StasisStart":
             await self._on_stasis_start(event)
@@ -74,11 +77,20 @@ class ARIController:
             await self._on_stasis_end(event)
         elif event_type == "ChannelDestroyed":
             await self._on_channel_destroyed(event)
+        elif event_type == "ChannelStateChange":
+            await self._on_channel_state_change(event)
 
     async def _on_stasis_start(self, event: dict):
         channel = event.get("channel", {})
         channel_id = channel.get("id", "")
         args = event.get("args", [])
+
+        # Check if this is an outbound channel we're waiting to bridge
+        if channel_id in self._pending_bridge:
+            inbound_id, call_id = self._pending_bridge.pop(channel_id)
+            logger.info("Outbound channel %s entered Stasis, bridging with %s", channel_id, inbound_id)
+            await self._bridge_call_channels(inbound_id, channel_id, call_id)
+            return
 
         # Ignore snoop and external media channels entering stasis
         if channel_id in self.channel_to_call:
@@ -157,7 +169,11 @@ class ARIController:
             logger.info("Bridged snoop + external media in bridge %s", bridge_id)
 
             # 4. Originate the outbound leg back through PBX to reach the callee
+            #    Register it as pending — we'll bridge when it enters Stasis
             outbound_id = f"outbound-{call_id[:8]}"
+            self._pending_bridge[outbound_id] = (channel_id, call_id)
+            self.channel_to_call[outbound_id] = call_id
+
             resp = await self.http.post(
                 "/ari/channels",
                 params={
@@ -167,10 +183,14 @@ class ARIController:
                 },
             )
             resp.raise_for_status()
-            self.channel_to_call[outbound_id] = call_id
-            logger.info("Originated outbound call to %s via pbx-trunk", dialed)
+            logger.info("Originated outbound call to %s via pbx-trunk (waiting for Stasis)", dialed)
 
-            # 5. Bridge the original incoming channel with the outbound channel
+        except Exception as e:
+            logger.error("Failed to set up interception for call %s: %s", call_id, e, exc_info=True)
+
+    async def _bridge_call_channels(self, inbound_id: str, outbound_id: str, call_id: str):
+        """Bridge the inbound and outbound call channels once both are in Stasis."""
+        try:
             call_bridge_id = f"callbridge-{call_id[:8]}"
             resp = await self.http.post(
                 "/ari/bridges",
@@ -180,13 +200,18 @@ class ARIController:
 
             resp = await self.http.post(
                 f"/ari/bridges/{call_bridge_id}/addChannel",
-                params={"channel": f"{channel_id},{outbound_id}"},
+                params={"channel": f"{inbound_id},{outbound_id}"},
             )
             resp.raise_for_status()
             logger.info("Bridged caller + callee in bridge %s", call_bridge_id)
-
         except Exception as e:
-            logger.error("Failed to set up interception for call %s: %s", call_id, e, exc_info=True)
+            logger.error("Failed to bridge call %s: %s", call_id, e, exc_info=True)
+
+    async def _on_channel_state_change(self, event: dict):
+        channel = event.get("channel", {})
+        channel_id = channel.get("id", "")
+        state = channel.get("state", "")
+        logger.debug("Channel %s state: %s", channel_id, state)
 
     async def _on_stasis_end(self, event: dict):
         channel_id = event.get("channel", {}).get("id", "")
@@ -208,9 +233,18 @@ class ARIController:
             await self._cleanup_call(call_id)
 
     async def _cleanup_call(self, call_id: str):
-        session = self.sessions.pop(call_id, None)
+        session = self.sessions.get(call_id)
         if not session:
             return
+
+        # Flush any remaining audio and wait for pending transcriptions
+        # Keep session in self.sessions so in-flight callbacks can find it
+        if hasattr(session, "_audio_buffer"):
+            session._audio_buffer.flush()
+            await session._audio_buffer.wait_pending()
+
+        # Now remove from sessions
+        self.sessions.pop(call_id, None)
 
         # Clean up ARI resources
         for channel_id in [session.snoop_channel_id, session.external_media_channel_id]:
